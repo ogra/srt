@@ -439,7 +439,7 @@ int main(int argc, char** argv)
 
     if (argc < 4)
     {
-        std::cerr << "Usage: srt-live-transmit-jwt -c /path/to/configfile.conf <input-uri> <output-uri>" << std::endl;
+        std::cerr << "Usage: srt-live-transmit-jwt -conf /path/to/configfile.conf <input-uri> <output-uri>" << std::endl;
         return 1;
     }
 
@@ -448,7 +448,7 @@ int main(int argc, char** argv)
     std::string output_uri;
     for (int i = 1; i < argc; ++i)
     {
-        if (std::string(argv[i]) == "-c" && i + 1 < argc)
+        if (std::string(argv[i]) == "-conf" && i + 1 < argc)
         {
             config_file = argv[++i];
         }
