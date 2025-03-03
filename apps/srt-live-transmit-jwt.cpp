@@ -84,6 +84,10 @@
 //
 #include <curl/curl.h>
 #include <json/json.h>
+#include <arpa/inet.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <unistd.h>
 
 using namespace std;
 
@@ -96,7 +100,6 @@ std::string read_config_file(const std::string& config_file)
         std::cerr << "Failed to open config file: " << config_file << std::endl;
         return "";
     }
-
     std::string line;
     while (std::getline(file, line))
     {
@@ -106,7 +109,6 @@ std::string read_config_file(const std::string& config_file)
             return line.substr(pos + 20);
         }
     }
-
     file.close();
     return "";
 }
@@ -128,33 +130,40 @@ bool send_web_hook(const std::string& jwt, const std::string& web_auth_hook_url)
     CURL*              curl;
     CURLcode           res;
     struct curl_slist* headers = NULL;
-
     curl_global_init(CURL_GLOBAL_DEFAULT);
     curl = curl_easy_init();
-
     if (curl)
     {
         headers = curl_slist_append(headers, ("Authorization: Bearer " + jwt).c_str());
         curl_easy_setopt(curl, CURLOPT_URL, web_auth_hook_url.c_str());
         curl_easy_setopt(curl, CURLOPT_HTTPHEADER, headers);
         curl_easy_setopt(curl, CURLOPT_NOBODY, 1L);
-
         res = curl_easy_perform(curl);
-
         long response_code;
         curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-
         curl_slist_free_all(headers);
         curl_easy_cleanup(curl);
-
-        if (res == CURLE_OK && (response_code == 200 || response_code == 400))
+        if (res == CURLE_OK && response_code == 200)
         {
             return true;
         }
     }
-
     curl_global_cleanup();
     return false;
+}
+
+std::string get_client_ip(int client_socket)
+{
+    struct sockaddr_in client_address;
+    socklen_t          client_address_length = sizeof(client_address);
+    if (getpeername(client_socket, (struct sockaddr*)&client_address, &client_address_length) == -1)
+    {
+        std::cerr << "Failed to get client IP address" << std::endl;
+        return "";
+    }
+    char ip[INET_ADDRSTRLEN];
+    inet_ntop(AF_INET, &client_address.sin_addr, ip, INET_ADDRSTRLEN);
+    return std::string(ip);
 }
 
 struct ForcedExit : public std::runtime_error
@@ -421,16 +430,22 @@ int parse_args(LiveTransmitConfig& cfg, int argc, char** argv)
 
 int main(int argc, char** argv)
 {
+    srt_startup();
+
+    // This is mainly required on Windows to initialize the network system,
+    // for a case when the instance would use UDP. SRT does it on its own, independently.
+    if (!SysInitializeNetwork())
+        throw std::runtime_error("Can't initialize network!");
+
     if (argc < 4)
     {
-        std::cerr << "Usage: srt-live-transmit -c /path/to/conffile.conf <input-uri> <output-uri>" << std::endl;
+        std::cerr << "Usage: srt-live-transmit-jwt -c /path/to/configfile.conf <input-uri> <output-uri>" << std::endl;
         return 1;
     }
 
     std::string config_file;
     std::string input_uri;
     std::string output_uri;
-
     for (int i = 1; i < argc; ++i)
     {
         if (std::string(argv[i]) == "-c" && i + 1 < argc)
@@ -468,23 +483,6 @@ int main(int argc, char** argv)
         std::cerr << "JWT not found in input-uri" << std::endl;
         return 1;
     }
-
-    // Send web hook request
-    if (!send_web_hook(jwt, web_auth_hook_url))
-    {
-        std::cerr << "Failed to authenticate with web hook" << std::endl;
-        return 1;
-    }
-
-    // Start stream input
-    // Maintain the existing logic of srt-live-transmit
-    // ...
-
-    srt_startup();
-    // This is mainly required on Windows to initialize the network system,
-    // for a case when the instance would use UDP. SRT does it on its own, independently.
-    if (!SysInitializeNetwork())
-        throw std::runtime_error("Can't initialize network!");
 
     // Symmetrically, this does a cleanup; put into a local destructor to ensure that
     // it's called regardless of how this function returns.
@@ -618,6 +616,51 @@ int main(int argc, char** argv)
             if (!src.get())
             {
                 src = Source::Create(cfg.source);
+
+                SRTSOCKET accept_socket = srt_accept(src->GetSRTSocket(), nullptr, nullptr);
+                if (accept_socket == SRT_INVALID_SOCK)
+                {
+                    std::cerr << "Failed to accept connection" << std::endl;
+                    return 1;
+                }
+
+                // Get client IP address
+                std::string client_ip = get_client_ip(accept_socket);
+
+                // Do not require JWT for access from localhost
+                if (client_ip == "127.0.0.1")
+                {
+                    // If JWT is found, send authentication request to web hook
+                    if (!jwt.empty())
+                    {
+                        if (!send_web_hook(jwt, web_auth_hook_url))
+                        {
+                            std::cerr << "Failed to authenticate with web hook" << std::endl;
+                            srt_close(accept_socket);
+                            return 1;
+                        }
+                    }
+                }
+                else
+                {
+                    // Require JWT for access from remote host
+                    if (jwt.empty())
+                    {
+                        std::cerr << "JWT not found in input-uri" << std::endl;
+                        srt_close(accept_socket);
+                        return 1;
+                    }
+                    else
+                    {
+                        if (!send_web_hook(jwt, web_auth_hook_url))
+                        {
+                            std::cerr << "Failed to authenticate with web hook" << std::endl;
+                            srt_close(accept_socket);
+                            return 1;
+                        }
+                    }
+                }
+
                 if (!src.get())
                 {
                     cerr << "Unsupported source type" << endl;
