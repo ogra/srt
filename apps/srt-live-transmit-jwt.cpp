@@ -478,11 +478,6 @@ int main(int argc, char** argv)
 
     // Extract JWT
     std::string jwt = extract_jwt(input_uri);
-    if (jwt.empty())
-    {
-        std::cerr << "JWT not found in input-uri" << std::endl;
-        return 1;
-    }
 
     // Symmetrically, this does a cleanup; put into a local destructor to ensure that
     // it's called regardless of how this function returns.
