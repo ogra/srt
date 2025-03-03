@@ -620,12 +620,13 @@ int main(int argc, char** argv)
                 SRTSOCKET accept_socket = srt_accept(src->GetSRTSocket(), nullptr, nullptr);
                 if (accept_socket == SRT_INVALID_SOCK)
                 {
-                    std::cerr << "Failed to accept connection" << std::endl;
+                    cerr << "Failed to accept connection" << endl;
                     return 1;
                 }
 
                 // Get client IP address
                 std::string client_ip = get_client_ip(accept_socket);
+                cerr << "Client IP: " << client_ip << endl;
 
                 // Do not require JWT for access from localhost
                 if (client_ip == "127.0.0.1")
@@ -635,7 +636,7 @@ int main(int argc, char** argv)
                     {
                         if (!send_web_hook(jwt, web_auth_hook_url))
                         {
-                            std::cerr << "Failed to authenticate with web hook" << std::endl;
+                            cerr << "Failed to authenticate with web hook" << endl;
                             srt_close(accept_socket);
                             return 1;
                         }
@@ -646,7 +647,7 @@ int main(int argc, char** argv)
                     // Require JWT for access from remote host
                     if (jwt.empty())
                     {
-                        std::cerr << "JWT not found in input-uri" << std::endl;
+                        cerr << "JWT not found in input-uri" << endl;
                         srt_close(accept_socket);
                         return 1;
                     }
@@ -654,7 +655,7 @@ int main(int argc, char** argv)
                     {
                         if (!send_web_hook(jwt, web_auth_hook_url))
                         {
-                            std::cerr << "Failed to authenticate with web hook" << std::endl;
+                            cerr << "Failed to authenticate with web hook" << endl;
                             srt_close(accept_socket);
                             return 1;
                         }
