@@ -92,19 +92,19 @@
 using namespace std;
 
 // Read config file
-std::string read_config_file(const std::string& config_file)
+string read_config_file(const string& config_file)
 {
-    std::ifstream file(config_file);
+    ifstream file(config_file);
     if (!file.is_open())
     {
-        std::cerr << "Failed to open config file: " << config_file << std::endl;
+        cerr << "Failed to open config file: " << config_file << endl;
         return "";
     }
-    std::string line;
+    string line;
     while (std::getline(file, line))
     {
         size_t pos = line.find("WEB_AUTH_HOOK_URL=");
-        if (pos != std::string::npos)
+        if (pos != string::npos)
         {
             return line.substr(pos + 20);
         }
@@ -114,10 +114,10 @@ std::string read_config_file(const std::string& config_file)
 }
 
 // Extract JWT
-std::string extract_jwt(const std::string& uri)
+string extract_jwt(const string& uri)
 {
     size_t pos = uri.find("?token=");
-    if (pos != std::string::npos)
+    if (pos != string::npos)
     {
         return uri.substr(pos + 7);
     }
@@ -125,7 +125,7 @@ std::string extract_jwt(const std::string& uri)
 }
 
 // Send web hook request
-bool send_web_hook(const std::string& jwt, const std::string& web_auth_hook_url)
+bool send_web_hook(const string& jwt, const string& web_auth_hook_url)
 {
     CURL*              curl;
     CURLcode           res;
@@ -152,18 +152,18 @@ bool send_web_hook(const std::string& jwt, const std::string& web_auth_hook_url)
     return false;
 }
 
-std::string get_client_ip(int client_socket)
+string get_client_ip(int client_socket)
 {
     struct sockaddr_in client_address;
     socklen_t          client_address_length = sizeof(client_address);
     if (getpeername(client_socket, (struct sockaddr*)&client_address, &client_address_length) == -1)
     {
-        std::cerr << "Failed to get client IP address" << std::endl;
+        cerr << "Failed to get client IP address" << endl;
         return "";
     }
     char ip[INET_ADDRSTRLEN];
     inet_ntop(AF_INET, &client_address.sin_addr, ip, INET_ADDRSTRLEN);
-    return std::string(ip);
+    return string(ip);
 }
 
 struct ForcedExit : public std::runtime_error
@@ -208,6 +208,7 @@ TestLogHandler(void* opaque, int level, const char* file, int line, const char* 
 
 struct LiveTransmitConfig
 {
+    string                      conf         = "/opt/srt/jwt.conf";
     int                         timeout      = 0;
     int                         timeout_mode = 0;
     int                         chunk_size   = -1;
@@ -247,8 +248,9 @@ void PrintOptionHelp(const OptionName& opt_names, const string& value, const str
 
 int parse_args(LiveTransmitConfig& cfg, int argc, char** argv)
 {
-    const OptionName o_timeout = {"t", "to", "timeout"}, o_timeout_mode = {"tm", "timeout-mode"},
-                     o_autorecon = {"a", "auto", "autoreconnect"}, o_chunk = {"c", "chunk"},
+    const OptionName o_conf = {"cf", "conf"}, o_timeout = {"t", "to", "timeout"},
+                     o_timeout_mode = {"tm", "timeout-mode"}, o_autorecon = {"a", "auto", "autoreconnect"},
+                     o_chunk    = {"c", "chunk"},
                      o_bwreport = {"r", "bwreport", "report", "bandwidth-report", "bitrate-report"},
                      o_srctime = {"st", "srctime", "sourcetime"}, o_buffering = {"buffering"},
                      o_statsrep = {"s", "stats", "stats-report-frequency"}, o_statsout = {"statsout"},
@@ -257,25 +259,17 @@ int parse_args(LiveTransmitConfig& cfg, int argc, char** argv)
                      o_quiet = {"q", "quiet"}, o_verbose = {"v", "verbose"}, o_help = {"h", "help"},
                      o_version = {"version"};
 
-    const vector<OptionScheme> optargs = {{o_timeout, OptionScheme::ARG_ONE},
-                                          {o_timeout_mode, OptionScheme::ARG_ONE},
-                                          {o_autorecon, OptionScheme::ARG_ONE},
-                                          {o_chunk, OptionScheme::ARG_ONE},
-                                          {o_bwreport, OptionScheme::ARG_ONE},
-                                          {o_srctime, OptionScheme::ARG_ONE},
-                                          {o_buffering, OptionScheme::ARG_ONE},
-                                          {o_statsrep, OptionScheme::ARG_ONE},
-                                          {o_statsout, OptionScheme::ARG_ONE},
-                                          {o_statspf, OptionScheme::ARG_ONE},
-                                          {o_statsfull, OptionScheme::ARG_NONE},
-                                          {o_loglevel, OptionScheme::ARG_ONE},
-                                          {o_logfa, OptionScheme::ARG_ONE},
-                                          {o_log_internal, OptionScheme::ARG_NONE},
-                                          {o_logfile, OptionScheme::ARG_ONE},
-                                          {o_quiet, OptionScheme::ARG_NONE},
-                                          {o_verbose, OptionScheme::ARG_NONE},
-                                          {o_help, OptionScheme::ARG_VAR},
-                                          {o_version, OptionScheme::ARG_NONE}};
+    const vector<OptionScheme> optargs = {
+        {o_conf, OptionScheme::ARG_ONE},          {o_timeout, OptionScheme::ARG_ONE},
+        {o_timeout_mode, OptionScheme::ARG_ONE},  {o_autorecon, OptionScheme::ARG_ONE},
+        {o_chunk, OptionScheme::ARG_ONE},         {o_bwreport, OptionScheme::ARG_ONE},
+        {o_srctime, OptionScheme::ARG_ONE},       {o_buffering, OptionScheme::ARG_ONE},
+        {o_statsrep, OptionScheme::ARG_ONE},      {o_statsout, OptionScheme::ARG_ONE},
+        {o_statspf, OptionScheme::ARG_ONE},       {o_statsfull, OptionScheme::ARG_NONE},
+        {o_loglevel, OptionScheme::ARG_ONE},      {o_logfa, OptionScheme::ARG_ONE},
+        {o_log_internal, OptionScheme::ARG_NONE}, {o_logfile, OptionScheme::ARG_ONE},
+        {o_quiet, OptionScheme::ARG_NONE},        {o_verbose, OptionScheme::ARG_NONE},
+        {o_help, OptionScheme::ARG_VAR},          {o_version, OptionScheme::ARG_NONE}};
 
     options_t params = ProcessOptions(argv, argc, optargs);
 
@@ -339,6 +333,10 @@ int parse_args(LiveTransmitConfig& cfg, int argc, char** argv)
         PrintLibVersion();
         cerr << "Usage: srt-live-transmit [options] <input-uri> <output-uri>\n";
         cerr << "\n";
+        PrintOptionHelp(o_conf,
+                        "<filename="
+                        ">",
+                        "config file path");
 #ifndef _WIN32
         PrintOptionHelp(o_timeout, "<timeout=0>", "exit timer in seconds");
         PrintOptionHelp(
@@ -383,6 +381,7 @@ int parse_args(LiveTransmitConfig& cfg, int argc, char** argv)
         return 2;
     }
 
+    cfg.conf            = Option<OutString>(params, o_conf);
     cfg.timeout         = Option<OutNumber>(params, o_timeout);
     cfg.timeout_mode    = Option<OutNumber>(params, o_timeout_mode);
     cfg.chunk_size      = Option<OutNumber>(params, "-1", o_chunk);
@@ -437,48 +436,6 @@ int main(int argc, char** argv)
     if (!SysInitializeNetwork())
         throw std::runtime_error("Can't initialize network!");
 
-    if (argc < 4)
-    {
-        std::cerr << "Usage: srt-live-transmit-jwt -conf /path/to/configfile.conf <input-uri> <output-uri>" << std::endl;
-        return 1;
-    }
-
-    std::string config_file;
-    std::string input_uri;
-    std::string output_uri;
-    for (int i = 1; i < argc; ++i)
-    {
-        if (std::string(argv[i]) == "-conf" && i + 1 < argc)
-        {
-            config_file = argv[++i];
-        }
-        else if (input_uri.empty())
-        {
-            input_uri = argv[i];
-        }
-        else if (output_uri.empty())
-        {
-            output_uri = argv[i];
-        }
-    }
-
-    if (config_file.empty() || input_uri.empty() || output_uri.empty())
-    {
-        std::cerr << "Missing required arguments" << std::endl;
-        return 1;
-    }
-
-    // Read config file
-    std::string web_auth_hook_url = read_config_file(config_file);
-    if (web_auth_hook_url.empty())
-    {
-        std::cerr << "Failed to read WEB_AUTH_HOOK_URL from config file" << std::endl;
-        return 1;
-    }
-
-    // Extract JWT
-    std::string jwt = extract_jwt(input_uri);
-
     // Symmetrically, this does a cleanup; put into a local destructor to ensure that
     // it's called regardless of how this function returns.
     struct NetworkCleanup
@@ -494,6 +451,17 @@ int main(int argc, char** argv)
     const int          parse_ret = parse_args(cfg, argc, argv);
     if (parse_ret != 0)
         return parse_ret == 1 ? EXIT_FAILURE : 0;
+
+    // Read config file
+    std::string web_auth_hook_url = read_config_file(cfg.conf);
+    if (web_auth_hook_url.empty())
+    {
+        std::cerr << "Failed to read WEB_AUTH_HOOK_URL from config file" << std::endl;
+        return 1;
+    }
+
+    // Extract JWT
+    std::string jwt = extract_jwt(cfg.source);
 
     //
     // Set global config variables
