@@ -579,52 +579,6 @@ int main(int argc, char** argv)
             if (!src.get())
             {
                 src = Source::Create(cfg.source);
-
-                SRTSOCKET accept_socket = srt_accept(src->GetSRTSocket(), nullptr, nullptr);
-                if (accept_socket == SRT_INVALID_SOCK)
-                {
-                    cerr << "Failed to accept connection" << endl;
-                    return 1;
-                }
-
-                // Get client IP address
-                std::string client_ip = get_client_ip(accept_socket);
-                cerr << "Client IP: " << client_ip << endl;
-
-                // Do not require JWT for access from localhost
-                if (client_ip == "127.0.0.1")
-                {
-                    // If JWT is found, send authentication request to web hook
-                    if (!jwt.empty())
-                    {
-                        if (!send_web_hook(jwt, web_auth_hook_url))
-                        {
-                            cerr << "Failed to authenticate with web hook" << endl;
-                            srt_close(accept_socket);
-                            return 1;
-                        }
-                    }
-                }
-                else
-                {
-                    // Require JWT for access from remote host
-                    if (jwt.empty())
-                    {
-                        cerr << "JWT not found in input-uri" << endl;
-                        srt_close(accept_socket);
-                        return 1;
-                    }
-                    else
-                    {
-                        if (!send_web_hook(jwt, web_auth_hook_url))
-                        {
-                            cerr << "Failed to authenticate with web hook" << endl;
-                            srt_close(accept_socket);
-                            return 1;
-                        }
-                    }
-                }
-
                 if (!src.get())
                 {
                     cerr << "Unsupported source type" << endl;
@@ -837,6 +791,44 @@ int main(int argc, char** argv)
                         {
                             if (!srcConnected)
                             {
+                                // Get client IP address
+                                std::string client_ip = get_client_ip(s);
+                                cerr << "Client IP: " << client_ip << endl;
+
+                                // Do not require JWT for access from localhost
+                                if (client_ip == "127.0.0.1")
+                                {
+                                    // If JWT is found, send authentication request to web hook
+                                    if (!jwt.empty())
+                                    {
+                                        if (!send_web_hook(jwt, web_auth_hook_url))
+                                        {
+                                            cerr << "Failed to authenticate with web hook" << endl;
+                                            srt_close(s);
+                                            return 1;
+                                        }
+                                    }
+                                }
+                                else
+                                {
+                                    // Require JWT for access from remote host
+                                    if (jwt.empty())
+                                    {
+                                        cerr << "JWT not found in input-uri" << endl;
+                                        srt_close(s);
+                                        return 1;
+                                    }
+                                    else
+                                    {
+                                        if (!send_web_hook(jwt, web_auth_hook_url))
+                                        {
+                                            cerr << "Failed to authenticate with web hook" << endl;
+                                            srt_close(s);
+                                            return 1;
+                                        }
+                                    }
+                                }
+
                                 if (!cfg.quiet)
                                     cerr << "SRT source connected" << endl;
                                 srcConnected = true;
